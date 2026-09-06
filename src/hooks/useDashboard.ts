@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import type { DashboardMetrics, ProfileMetrics, Client, JobProfile, Referral } from '@/lib/types';
+import { supabase } from '../lib/supabase';
+import type { DashboardMetrics, ProfileMetrics, Client, JobProfile, Referral } from '../lib/types';
 
 export function useDashboard(clientId: string | null) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);

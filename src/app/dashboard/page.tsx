@@ -1,10 +1,10 @@
 'use client';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { Layout } from '@/components/Layout';
-import { DashboardOverview } from '@/app/dashboard/components/DashboardOverview';
-import { Card } from '@/components/ui/Card';
+import { Layout } from '../../components/Layout';
+import { DashboardOverview } from '../../app/dashboard/components/DashboardOverview';
+import { Card } from '../../components/ui/Card';
 import {
   Users,
   Briefcase,

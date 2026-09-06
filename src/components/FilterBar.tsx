@@ -1,8 +1,8 @@
 'use client';
 import { Calendar } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
 
 interface FilterBarProps {
   dateRange: { start: string; end: string } | null;

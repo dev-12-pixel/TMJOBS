@@ -1,5 +1,5 @@
 'use client';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency } from '../lib/utils';
 
 interface EarningsChartProps {
   data: { label: string; amount: number }[];

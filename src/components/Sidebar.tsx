@@ -9,7 +9,7 @@ import {
   Settings,
   DollarSign,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '../lib/utils';
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },

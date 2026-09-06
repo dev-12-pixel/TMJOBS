@@ -1,12 +1,12 @@
 'use client';
-import { useDashboard } from '@/hooks/useDashboard';
+import { useDashboard } from '../hooks/useDashboard';
 import { useEffect } from 'react';
-import { Card } from '@/components/ui/Card';
-import { MetricCard } from '@/components/MetricCard';
-import { FilterBar } from '@/components/FilterBar';
-import { ReferralTable } from '@/components/ReferralTable';
-import { EarningsChart } from '@/components/EarningsChart';
-import { formatCurrency, formatPercentage } from '@/lib/utils';
+import { Card } from '../components/ui/Card';
+import { MetricCard } from '../components/MetricCard';
+import { FilterBar } from '../components/FilterBar';
+import { ReferralTable } from '../components/ReferralTable';
+import { EarningsChart } from '../components/EarningsChart';
+import { formatCurrency, formatPercentage } from '../lib/utils';
 import { Briefcase, Users, CheckCircle, XCircle, Mail, DollarSign } from 'lucide-react';
 
 interface DashboardOverviewProps {

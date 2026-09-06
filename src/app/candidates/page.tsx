@@ -1,11 +1,11 @@
 'use client';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Layout } from '@/components/Layout';
-import { Card } from '@/components/ui/Card';
-import { supabase } from '@/lib/supabase';
-import type { Candidate, JobProfile } from '@/lib/types';
+import { Layout } from '../../components/Layout';
+import { Card } from '../../components/ui/Card';
+import { supabase } from '../../lib/supabase';
+import type { Candidate, JobProfile } from '../../lib/types';
 import { Search, UserPlus, Mail } from 'lucide-react';
 
 export default function CandidatesPage() {

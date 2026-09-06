@@ -1,6 +1,6 @@
 'use client';
-import { Referral } from '@/lib/types';
-import { Badge } from '@/components/ui/Badge';
+import { Referral } from '../lib/types';
+import { Badge } from '../components/ui/Badge';
 import { format } from 'date-fns';
 import { ArrowUpDown } from 'lucide-react';
 

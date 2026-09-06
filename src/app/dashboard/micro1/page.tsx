@@ -1,14 +1,14 @@
 'use client';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '../../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Layout } from '@/components/Layout';
-import { Card } from '@/components/ui/Card';
-import { MetricCard } from '@/components/MetricCard';
-import { FilterBar } from '@/components/FilterBar';
-import { ReferralTable } from '@/components/ReferralTable';
-import { EarningsChart } from '@/components/EarningsChart';
-import { formatCurrency, formatPercentage } from '@/lib/utils';
+import { Layout } from '../../../components/Layout';
+import { Card } from '../../../components/ui/Card';
+import { MetricCard } from '../../../components/MetricCard';
+import { FilterBar } from '../../../components/FilterBar';
+import { ReferralTable } from '../../../components/ReferralTable';
+import { EarningsChart } from '../../../components/EarningsChart';
+import { formatCurrency, formatPercentage } from '../../../lib/utils';
 import {
   Briefcase,
   Users,
@@ -18,8 +18,8 @@ import {
   DollarSign,
   ArrowRight,
 } from 'lucide-react';
-import type { JobProfile, Referral } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
+import type { JobProfile, Referral } from '../../../lib/types';
+import { supabase } from '../../../lib/supabase';
 
 const CLIENT_ID = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
 const CLIENT_NAME = 'Micro1';

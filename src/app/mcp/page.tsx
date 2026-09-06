@@ -1,9 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { Layout } from '@/components/Layout';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Layout } from '../../components/Layout';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import {
   Sparkles,
   MessageCircle,
@@ -15,7 +15,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 export default function MCPPage() {
   const [prompt, setPrompt] = useState('');

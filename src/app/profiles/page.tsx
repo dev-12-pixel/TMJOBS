@@ -1,13 +1,13 @@
 'use client';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '../../hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Layout } from '@/components/Layout';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { supabase } from '@/lib/supabase';
-import type { JobProfile, Client } from '@/lib/types';
+import { Layout } from '../../components/Layout';
+import { Card } from '../../components/ui/Card';
+import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { supabase } from '../../lib/supabase';
+import type { JobProfile, Client } from '../../lib/types';
 import { Plus, Edit2, Trash2, Briefcase } from 'lucide-react';
 
 export default function ProfilesPage() {
