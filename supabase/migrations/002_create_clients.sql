@@ -22,4 +22,5 @@ CREATE POLICY "Users can update own clients" ON public.clients
 
 INSERT INTO public.clients (id, name, description) VALUES
   ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Major Turing', 'Major Turing - Premium Tech Recruitment'),
-  ('b2c3d4e5-f6a7-8901-bcde-f12345678901', 'Micro1', 'Micro1 - Specialized Tech Staffing');
+  ('b2c3d4e5-f6a7-8901-bcde-f12345678901', 'Micro1', 'Micro1 - Specialized Tech Staffing')
+ON CONFLICT (id) DO NOTHING;

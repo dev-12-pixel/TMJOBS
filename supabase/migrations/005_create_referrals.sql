@@ -29,6 +29,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trigger_update_referral_status ON public.referrals;
+
 CREATE TRIGGER trigger_update_referral_status
   BEFORE UPDATE ON public.referrals
   FOR EACH ROW
