@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-background: #f0f2f5;
+  --color-foreground: #000000;
+  --color-primary: #3b82f6;
+  --color-primary-foreground: #ffffff;
+  --color-card: #ffffff;
+  --color-card-foreground: #1f2937;
+  --color-border: #e5e7eb;
+  --color-muted: #6b7280;
+  --color-muted-foreground: #9ca3af;
+  --color-accent: #eff6ff;
+  --color-accent-foreground: #1d4ed8;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-lg rounded-xl shadow-lg border border-border;
+  }
+  .metric-card {
+    @apply glass-card p-6 hover:shadow-xl transition-all duration-300;
+  }
+}
