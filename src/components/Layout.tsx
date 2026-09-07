@@ -1,17 +1,26 @@
 'use client';
 import { useAuth } from '../hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useEffect, ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { ReactNode } from 'react';
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { session, signOut } = useAuth();
+  const { session, loading, signOut } = useAuth();
   const router = useRouter();
 
-  if (!session) {
-    router.push('/');
-    return null;
+  useEffect(() => {
+    if (!loading && !session) {
+      router.push('/');
+    }
+  }, [loading, session, router]);
+
+  if (loading || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">
+        Loading...
+      </div>
+    );
   }
 
   return (
