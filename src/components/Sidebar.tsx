@@ -1,30 +1,44 @@
 'use client';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
+  UserSquare2,
   Briefcase,
-  Activity,
-  Settings,
+  Building2,
   DollarSign,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { supabase } from '../lib/supabase';
+import type { Platform } from '../lib/types';
 
-const menuItems = [
+const staticItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/major-turing', label: 'Major Turing', icon: Briefcase },
-  { href: '/dashboard/micro1', label: 'Micro1', icon: Briefcase },
   { href: '/candidates', label: 'Candidates', icon: Users },
-  { href: '/profiles', label: 'Profiles', icon: Briefcase },
-  { href: '/mcp', label: 'MCP Connector', icon: Activity },
+  { href: '/referrals', label: 'Referrals', icon: Briefcase },
+  { href: '/accounts', label: 'Referral Accounts', icon: UserSquare2 },
+  { href: '/jobs', label: 'Jobs', icon: Briefcase },
+  { href: '/platforms', label: 'Platforms', icon: Building2 },
+  { href: '/bonuses', label: 'Bonuses', icon: DollarSign },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from('platforms')
+      .select('*')
+      .eq('active', true)
+      .order('name')
+      .then(({ data }) => setPlatforms(data || []));
+  }, []);
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white z-50">
+    <aside className="fixed left-0 top-0 h-full w-64 bg-gray-900 text-white z-50 overflow-y-auto">
       <div className="p-6 border-b border-gray-800">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
@@ -35,18 +49,15 @@ export function Sidebar() {
       </div>
 
       <nav className="p-4 space-y-1">
-        {menuItems.map((item) => {
-          const isActive = pathname === item.href || 
-            (item.href !== '/dashboard' && pathname.startsWith(item.href));
+        {staticItems.map((item) => {
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
                 'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
-                isActive
-                  ? 'bg-primary-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                isActive ? 'bg-primary-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
               )}
             >
               <item.icon className="w-5 h-5" />
@@ -54,6 +65,29 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {platforms.length > 0 && (
+          <div className="pt-4 mt-4 border-t border-gray-800">
+            <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Platforms</p>
+            {platforms.map((platform) => {
+              const href = `/dashboard/platform/${platform.slug}`;
+              const isActive = pathname === href;
+              return (
+                <Link
+                  key={platform.id}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors',
+                    isActive ? 'bg-primary-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  )}
+                >
+                  <Briefcase className="w-4 h-4" />
+                  {platform.name}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </nav>
     </aside>
   );

@@ -1,9 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.MCP_SUPABASE_URL || '';
@@ -11,248 +8,134 @@ const supabaseServiceKey = process.env.MCP_SUPABASE_SERVICE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const server = new Server(
-  {
-    name: 'tmjobs-mcp',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
+  { name: 'tmjobs-mcp', version: '2.0.0' },
+  { capabilities: { tools: {} } }
 );
 
+// All tools read from vw_referral_dashboard - the same view the web dashboard
+// queries - so numbers reported to Claude always match what's on screen.
+// Read-only by design: no tool here can create, update, or delete anything.
+
 async function getDashboardSummary() {
-  const { data: { users } } = await supabase.from('users').select('*');
-  const { data: referrals } = await supabase.from('referrals').select('*');
-  const { data: payments } = await supabase.from('payments').select('*');
-  const { data: jobProfiles } = await supabase.from('job_profiles').select('*');
-  const { data: clients } = await supabase.from('clients').select('*');
-
-  const totalReferrals = referrals?.length || 0;
-  const totalHired = referrals?.filter(r => r.status === 'hired').length || 0;
-  const totalReceivable = payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-
+  const { data: rows, error } = await supabase.from('vw_referral_dashboard').select('*');
+  if (error) return { error: error.message };
+  const all = rows || [];
+  const hired = all.filter((r) => r.status === 'hired');
+  const notHired = all.filter((r) => r.status === 'not_hired');
+  const applied = all.filter((r) => r.applied_at !== null);
   return {
-    totalUsers: users?.length || 0,
-    totalReferrals,
-    totalHired,
-    totalHiredRate: totalReferrals > 0 ? ((totalHired / totalReferrals) * 100).toFixed(1) : '0',
-    totalReceivable,
-    totalClients: clients?.length || 0,
-    totalJobProfiles: jobProfiles?.length || 0,
+    referrals: all.length,
+    applied: applied.length,
+    hired: hired.length,
+    not_hired: notHired.length,
+    referral_to_hire_rate: all.length ? Number((hired.length / all.length * 100).toFixed(1)) : 0,
+    receivable: all.filter((r) => r.bonus_status === 'remaining').reduce((s, r) => s + Number(r.bonus_amount || 0), 0),
+    paid: all.filter((r) => r.bonus_status === 'paid').reduce((s, r) => s + Number(r.bonus_amount || 0), 0),
   };
 }
 
-async function getClientMetrics(clientId: string) {
-  const { data: clients } = await supabase.from('clients').select('*').eq('id', clientId).single();
-  const { data: jobProfiles } = await supabase.from('job_profiles').select('*').eq('client_id', clientId);
-  const { data: candidates } = await supabase.from('candidates').select('*').in('job_profile_id', jobProfiles?.map(p => p.id) || []);
-  const { data: referrals } = await supabase.from('referrals').select('*').in('candidate_id', candidates?.map(c => c.id) || []);
-  const { data: payments } = await supabase.from('payments').select('*').in('candidate_id', candidates?.map(c => c.id) || []);
-
-  const totalProfiles = jobProfiles?.length || 0;
-  const totalReferrals = referrals?.length || 0;
-  const totalHired = referrals?.filter(r => r.status === 'hired').length || 0;
-  const totalNotHired = referrals?.filter(r => r.status === 'not_hired').length || 0;
-  const totalSignedUp = referrals?.filter(r => r.status === 'signed_up').length || 0;
-  const totalEmailed = totalReferrals;
-  const totalReceivable = payments?.reduce((sum, p) => sum + p.amount, 0) || 0;
-
-  const receivableByProfile: Record<string, number> = {};
-  const receivableByHire: Record<string, number> = {};
-
-  jobProfiles?.forEach(p => {
-    const pHired = referrals?.filter(r => r.job_profile_id === p.id && r.status === 'hired') || [];
-    receivableByProfile[p.title] = pHired.length * p.referral_bonus_amount;
-    pHired.forEach(h => {
-      const c = candidates?.find(cand => cand.id === h.candidate_id);
-      receivableByHire[c?.first_name + ' ' + c?.last_name || h.candidate_id] = p.referral_bonus_amount;
-    });
-  });
-
+async function getPlatformStats(platformId: string) {
+  const { data: platform } = await supabase.from('platforms').select('*').eq('id', platformId).maybeSingle();
+  const { data: rows, error } = await supabase.from('vw_referral_dashboard').select('*').eq('platform_id', platformId);
+  if (error) return { error: error.message };
+  const all = rows || [];
+  const hired = all.filter((r) => r.status === 'hired');
   return {
-    clientName: clients?.name || clientId,
-    totalProfiles,
-    totalReferrals,
-    totalSignedUp,
-    totalHired,
-    totalNotHired,
-    totalEmailed,
-    appliedToHiredRatio: totalReferrals > 0 ? ((totalHired / totalReferrals) * 100).toFixed(1) : '0',
-    totalReceivable,
-    receivableByProfile,
-    receivableByHire,
+    platform: platform?.name || platformId,
+    referrals: all.length,
+    hired: hired.length,
+    not_hired: all.filter((r) => r.status === 'not_hired').length,
+    hire_rate: all.length ? Number((hired.length / all.length * 100).toFixed(1)) : 0,
+    receivable: all.filter((r) => r.bonus_status === 'remaining').reduce((s, r) => s + Number(r.bonus_amount || 0), 0),
   };
 }
 
-async function getCandidateStatus(candidateId: string) {
-  const { data: candidate } = await supabase.from('candidates').select('*').eq('id', candidateId).single();
-  const { data: referrals } = await supabase.from('referrals').select('*').eq('candidate_id', candidateId);
-  const { data: payments } = await supabase.from('payments').select('*').eq('candidate_id', candidateId);
+async function getAccountStats(accountId: string) {
+  const { data: account } = await supabase.from('accounts').select('*').eq('id', accountId).maybeSingle();
+  const { data: rows, error } = await supabase.from('vw_referral_dashboard').select('*').eq('account_id', accountId);
+  if (error) return { error: error.message };
+  const all = rows || [];
+  const hired = all.filter((r) => r.status === 'hired');
+  return {
+    account: account?.name || accountId,
+    referrals: all.length,
+    hired: hired.length,
+    hire_rate: all.length ? Number((hired.length / all.length * 100).toFixed(1)) : 0,
+    hires: hired.map((r) => ({ candidate: `${r.first_name} ${r.last_name}`, job: r.job_title, hired_at: r.hired_at })),
+  };
+}
 
+async function getCandidate(candidateId: string) {
+  const { data: candidate } = await supabase.from('candidates').select('*').eq('id', candidateId).maybeSingle();
   if (!candidate) return { error: 'Candidate not found' };
-
+  const { data: referrals } = await supabase.from('vw_referral_dashboard').select('*').eq('candidate_id', candidateId);
   return {
-    candidate: {
-      name: `${candidate.first_name} ${candidate.last_name}`,
-      email: candidate.email,
-      profile: candidate.job_profile_id,
-    },
-    referralStatus: referrals?.[0]?.status || 'not found',
-    payments: payments?.map(p => ({
-      amount: p.amount,
-      status: p.status,
-    })) || [],
+    candidate: { name: `${candidate.first_name} ${candidate.last_name}`, email: candidate.email, phone: candidate.phone },
+    referrals: (referrals || []).map((r) => ({
+      platform: r.platform_name, account: r.account_name, job: r.job_title,
+      status: r.status, bonus_amount: r.bonus_amount, bonus_status: r.bonus_status,
+    })),
   };
 }
 
-async function addCandidate(data: any) {
-  const { data, error } = await supabase.from('candidates').insert({
-    job_profile_id: data.job_profile_id,
-    first_name: data.first_name,
-    last_name: data.last_name,
-    email: data.email,
-    phone: data.phone,
-    source: data.source,
-    created_by: data.userId,
-  }).select().single();
-
-  if (error) return { error: error.message };
-  return { candidate: data };
-}
-
-async function updateReferralStatus(data: any) {
+async function searchCandidates(query: string) {
   const { data, error } = await supabase
-    .from('referrals')
-    .update({ status: data.status })
-    .eq('id', data.referralId)
-    .select()
-    .single();
-
+    .from('candidates')
+    .select('*')
+    .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%`)
+    .limit(20);
   if (error) return { error: error.message };
-  return { referral: data };
+  return { candidates: (data || []).map((c) => ({ id: c.id, name: `${c.first_name} ${c.last_name}`, email: c.email, phone: c.phone })) };
 }
 
-async function getEarnings(data: any) {
-  const query = supabase.from('payments').select('*');
-  if (data.clientId) query.eq('client_id', data.clientId);
-  const { data: payments, error } = await query;
+async function getReceivables() {
+  const { data, error } = await supabase.from('vw_referral_dashboard').select('*').eq('bonus_status', 'remaining');
   if (error) return { error: error.message };
-
+  const rows = data || [];
   return {
-    totalEarnings: payments?.reduce((sum, p) => sum + p.amount, 0) || 0,
-    totalPaid: payments?.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0) || 0,
-    totalPending: payments?.filter(p => p.status === 'pending').reduce((sum, p) => sum + p.amount, 0) || 0,
-    breakdown: payments?.map(p => ({
-      candidate: p.candidate_id,
-      amount: p.amount,
-      status: p.status,
-      date: p.created_at,
-    })) || [],
+    total_receivable: rows.reduce((s, r) => s + Number(r.bonus_amount || 0), 0),
+    count: rows.length,
+    by_candidate: rows.map((r) => ({ candidate: `${r.first_name} ${r.last_name}`, platform: r.platform_name, amount: r.bonus_amount })),
   };
 }
 
-server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
-      {
-        name: 'get_dashboard_summary',
-        description: 'Get overall dashboard metrics for all clients',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            date_range: { type: 'string', description: 'Optional date range filter' },
-          },
-        },
-      },
-      {
-        name: 'get_client_metrics',
-        description: 'Get detailed metrics for a specific client',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            client_id: { type: 'string', description: 'The client ID' },
-          },
-          required: ['client_id'],
-        },
-      },
-      {
-        name: 'get_candidate_status',
-        description: 'Get tracking status for a specific candidate',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            candidate_id: { type: 'string', description: 'The candidate ID' },
-          },
-          required: ['candidate_id'],
-        },
-      },
-      {
-        name: 'get_earnings',
-        description: 'Get referral earnings breakdown',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            period: { type: 'string', description: 'Optional period filter' },
-            client_id: { type: 'string', description: 'Optional client filter' },
-          },
-        },
-      },
-      {
-        name: 'add_candidate',
-        description: 'Add a new candidate to the system',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            client_id: { type: 'string' },
-            job_profile_id: { type: 'string' },
-            first_name: { type: 'string' },
-            last_name: { type: 'string' },
-            email: { type: 'string' },
-            phone: { type: 'string' },
-            source: { type: 'string' },
-            userId: { type: 'string' },
-          },
-          required: ['client_id', 'job_profile_id', 'first_name', 'last_name', 'email', 'userId'],
-        },
-      },
-      {
-        name: 'update_referral_status',
-        description: 'Update referral status',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            referralId: { type: 'string' },
-            status: { type: 'string', enum: ['applied', 'signed_up', 'hired', 'not_hired'] },
-          },
-          required: ['referralId', 'status'],
-        },
-      },
-    ],
-  };
-});
+async function getReceivablesByAccount() {
+  const { data, error } = await supabase.from('vw_referral_dashboard').select('*').eq('bonus_status', 'remaining');
+  if (error) return { error: error.message };
+  const byAccount: Record<string, number> = {};
+  (data || []).forEach((r) => {
+    byAccount[r.account_name] = (byAccount[r.account_name] || 0) + Number(r.bonus_amount || 0);
+  });
+  return { receivable_by_account: byAccount };
+}
+
+const TOOLS = [
+  { name: 'get_dashboard_summary', description: 'Overall referral/hiring/bonus summary across all platforms', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_platform_stats', description: 'Referral/hiring/receivable stats for one platform', inputSchema: { type: 'object', properties: { platform_id: { type: 'string' } }, required: ['platform_id'] } },
+  { name: 'get_account_stats', description: 'Referral/hiring stats and hire list for one referral account', inputSchema: { type: 'object', properties: { account_id: { type: 'string' } }, required: ['account_id'] } },
+  { name: 'get_candidate', description: 'Full referral/bonus history for one candidate', inputSchema: { type: 'object', properties: { candidate_id: { type: 'string' } }, required: ['candidate_id'] } },
+  { name: 'search_candidates', description: 'Search candidates by name, email, or phone', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'get_receivables', description: 'Total outstanding bonus money owed, broken down by candidate', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_receivables_by_account', description: 'Outstanding bonus money owed, grouped by referral account', inputSchema: { type: 'object', properties: {} } },
+];
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
+  const { name, arguments: args } = request.params as { name: string; arguments: Record<string, string> };
   try {
+    let result: unknown;
     switch (name) {
-      case 'get_dashboard_summary':
-        return { content: [{ type: 'text', text: JSON.stringify(await getDashboardSummary(), null, 2) }] };
-      case 'get_client_metrics':
-        return { content: [{ type: 'text', text: JSON.stringify(await getClientMetrics(args.client_id), null, 2) }] };
-      case 'get_candidate_status':
-        return { content: [{ type: 'text', text: JSON.stringify(await getCandidateStatus(args.candidate_id), null, 2) }] };
-      case 'get_earnings':
-        return { content: [{ type: 'text', text: JSON.stringify(await getEarnings(args), null, 2) }] };
-      case 'add_candidate':
-        return { content: [{ type: 'text', text: JSON.stringify(await addCandidate(args), null, 2) }] };
-      case 'update_referral_status':
-        return { content: [{ type: 'text', text: JSON.stringify(await updateReferralStatus(args), null, 2) }] };
-      default:
-        return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
+      case 'get_dashboard_summary': result = await getDashboardSummary(); break;
+      case 'get_platform_stats': result = await getPlatformStats(args.platform_id); break;
+      case 'get_account_stats': result = await getAccountStats(args.account_id); break;
+      case 'get_candidate': result = await getCandidate(args.candidate_id); break;
+      case 'search_candidates': result = await searchCandidates(args.query); break;
+      case 'get_receivables': result = await getReceivables(); break;
+      case 'get_receivables_by_account': result = await getReceivablesByAccount(); break;
+      default: return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
     }
+    return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
   } catch (error) {
     return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` }] };
   }
