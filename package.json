@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "mcp": "tsx --env-file=.env.local src/mcp/server.ts",
+    "mcp:http": "tsx --env-file=.env.local src/mcp/http-server.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
@@ -15,6 +17,7 @@
     "autoprefixer": "^10.4.21",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "express": "^5.2.1",
     "lucide-react": "^0.460.0",
     "next": "^16.3.4",
     "postcss": "^8.4.49",
@@ -27,9 +30,11 @@
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
 }
