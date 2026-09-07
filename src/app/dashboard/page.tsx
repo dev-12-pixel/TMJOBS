@@ -1,7 +1,7 @@
 'use client';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card } from '@/components/ui/Card';
 import { MetricCard } from '@/components/MetricCard';
@@ -9,9 +9,27 @@ import { supabase } from '@/lib/supabase';
 import { fetchDashboardRows, fetchDashboardRowsPage, fetchAccounts, summarizeDashboard, funnelCounts } from '@/lib/services/dashboard';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import type { Platform, DashboardSummary, ReferralDashboardRow } from '@/lib/types';
-import { Users, Briefcase, CheckCircle, XCircle, Mail, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Briefcase, CheckCircle, XCircle, Mail, DollarSign, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 const PAGE_SIZE = 10;
+
+// Same candidate can be referred to several jobs through the same account
+// (e.g. one person placed on 4 different postings in a week) - group those
+// so the table shows one row per candidate+account instead of repeating the
+// name several times in a row.
+function groupPageRows(rows: ReferralDashboardRow[]) {
+  const groups: { key: string; candidate: string; platform: string; account: string; jobs: ReferralDashboardRow[] }[] = [];
+  const index = new Map<string, number>();
+  for (const r of rows) {
+    const key = `${r.candidate_id}:${r.account_id}`;
+    if (!index.has(key)) {
+      index.set(key, groups.length);
+      groups.push({ key, candidate: `${r.first_name} ${r.last_name}`, platform: r.platform_name, account: r.account_name, jobs: [] });
+    }
+    groups[index.get(key)!].jobs.push(r);
+  }
+  return groups;
+}
 
 export default function DashboardPage() {
   const { session, loading: authLoading } = useAuth();
@@ -27,6 +45,7 @@ export default function DashboardPage() {
   const [pageRows, setPageRows] = useState<ReferralDashboardRow[]>([]);
   const [pageTotal, setPageTotal] = useState(0);
   const [pageLoading, setPageLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!authLoading && !session) router.push('/');
@@ -182,21 +201,47 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pageRows.map((r) => (
-                      <tr key={r.referral_id} className="border-b border-gray-100">
-                        <td className="py-2 pr-4 font-medium text-gray-800">{r.first_name} {r.last_name}</td>
-                        <td className="py-2 pr-4">{r.platform_name}</td>
-                        <td className="py-2 pr-4">{r.account_name}</td>
-                        <td className="py-2 pr-4">{r.job_title}</td>
-                        <td className="py-2 pr-4">
-                          <span className={`badge ${r.status === 'hired' ? 'badge-success' : r.status === 'not_hired' ? 'badge-danger' : r.status === 'applied' ? 'badge-info' : 'badge-warning'}`}>
-                            {r.status.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4">{new Date(r.referral_date).toLocaleDateString()}</td>
-                        <td className="py-2 pr-4">{r.bonus_amount ? `${formatCurrency(r.bonus_amount)} (${r.bonus_status})` : '-'}</td>
-                      </tr>
-                    ))}
+                    {groupPageRows(pageRows).map((g) => {
+                      const isOpen = expanded.has(g.key);
+                      const [primary, ...rest] = g.jobs;
+                      const rowsToShow = g.jobs.length === 1 || isOpen ? g.jobs : [primary];
+                      return (
+                        <Fragment key={g.key}>
+                          {rowsToShow.map((r, i) => (
+                            <tr key={r.referral_id} className="border-b border-gray-100">
+                              <td className="py-2 pr-4 font-medium text-gray-800">{i === 0 ? g.candidate : ''}</td>
+                              <td className="py-2 pr-4">{i === 0 ? g.platform : ''}</td>
+                              <td className="py-2 pr-4">{i === 0 ? g.account : ''}</td>
+                              <td className="py-2 pr-4">{r.job_title}</td>
+                              <td className="py-2 pr-4">
+                                <span className={`badge ${r.status === 'hired' ? 'badge-success' : r.status === 'not_hired' ? 'badge-danger' : r.status === 'applied' ? 'badge-info' : 'badge-warning'}`}>
+                                  {r.status.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-4">{new Date(r.referral_date).toLocaleDateString()}</td>
+                              <td className="py-2 pr-4">{r.bonus_amount ? `${formatCurrency(r.bonus_amount)} (${r.bonus_status})` : '-'}</td>
+                            </tr>
+                          ))}
+                          {rest.length > 0 && (
+                            <tr key={g.key + '-toggle'} className="border-b border-gray-100">
+                              <td colSpan={7} className="py-1.5 pr-4">
+                                <button
+                                  onClick={() => setExpanded((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(g.key)) next.delete(g.key); else next.add(g.key);
+                                    return next;
+                                  })}
+                                  className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"
+                                >
+                                  <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                                  {isOpen ? 'Show less' : `+${rest.length} more job${rest.length > 1 ? 's' : ''} for ${g.candidate}`}
+                                </button>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {!pageLoading && pageRows.length === 0 && <p className="text-center text-gray-500 py-8">No referrals match these filters</p>}
