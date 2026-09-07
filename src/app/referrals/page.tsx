@@ -1,18 +1,23 @@
 'use client';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Layout } from '@/components/Layout';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import type { Platform, Account, Job, Candidate, ReferralDashboardRow, ReferralStatus } from '@/lib/types';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 10;
 
 export default function ReferralsPage() {
   const { session, loading: authLoading } = useAuth();
   const router = useRouter();
   const [rows, setRows] = useState<ReferralDashboardRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsLoading, setRowsLoading] = useState(true);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -27,7 +32,6 @@ export default function ReferralsPage() {
 
   useEffect(() => {
     if (!session) return;
-    load();
     Promise.all([
       supabase.from('platforms').select('*').order('name'),
       supabase.from('accounts').select('*').order('name'),
@@ -41,10 +45,27 @@ export default function ReferralsPage() {
     });
   }, [session]);
 
-  const load = async () => {
-    const { data } = await supabase.from('vw_referral_dashboard').select('*').order('referral_date', { ascending: false });
+  // Backend-paginated (Postgres .range(), not a client-side slice) so this
+  // scales past however many referrals exist. Newest referral_date first -
+  // real data (kept dated after synthetic) surfaces on the first pages.
+  const load = useCallback(async () => {
+    if (!session) return;
+    setRowsLoading(true);
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    const { data, count } = await supabase
+      .from('vw_referral_dashboard')
+      .select('*', { count: 'exact' })
+      .order('referral_date', { ascending: false })
+      .range(from, to);
     setRows(data || []);
-  };
+    setTotal(count || 0);
+    setRowsLoading(false);
+  }, [session, page]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -134,7 +155,10 @@ export default function ReferralsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {rowsLoading && (
+                  <tr><td colSpan={7} className="py-8 text-center text-gray-400">Loading...</td></tr>
+                )}
+                {!rowsLoading && rows.map((r) => (
                   <tr key={r.referral_id} className="border-b border-gray-100">
                     <td className="py-2 pr-4 font-medium text-gray-800">
                       <a href={`/candidates/${r.candidate_id}`} className="hover:text-primary-600">{r.first_name} {r.last_name}</a>
@@ -167,8 +191,33 @@ export default function ReferralsPage() {
                 ))}
               </tbody>
             </table>
-            {rows.length === 0 && <p className="text-center text-gray-500 py-8">No referrals yet</p>}
+            {!rowsLoading && rows.length === 0 && <p className="text-center text-gray-500 py-8">No referrals yet</p>}
           </div>
+
+          {total > 0 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">
+              <span>Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0 || rowsLoading}
+                  className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span>Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
+                <button
+                  onClick={() => setPage((p) => ((p + 1) * PAGE_SIZE < total ? p + 1 : p))}
+                  disabled={(page + 1) * PAGE_SIZE >= total || rowsLoading}
+                  className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     </Layout>

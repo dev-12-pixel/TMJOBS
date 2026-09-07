@@ -6,10 +6,12 @@ import { Layout } from '@/components/Layout';
 import { Card } from '@/components/ui/Card';
 import { MetricCard } from '@/components/MetricCard';
 import { supabase } from '@/lib/supabase';
-import { fetchDashboardRows, fetchAccounts, summarizeDashboard, funnelCounts } from '@/lib/services/dashboard';
+import { fetchDashboardRows, fetchDashboardRowsPage, fetchAccounts, summarizeDashboard, funnelCounts } from '@/lib/services/dashboard';
 import { formatCurrency, formatPercentage } from '@/lib/utils';
 import type { Platform, DashboardSummary, ReferralDashboardRow } from '@/lib/types';
-import { Users, Briefcase, CheckCircle, XCircle, Mail, DollarSign } from 'lucide-react';
+import { Users, Briefcase, CheckCircle, XCircle, Mail, DollarSign, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 10;
 
 export default function DashboardPage() {
   const { session, loading: authLoading } = useAuth();
@@ -21,6 +23,10 @@ export default function DashboardPage() {
   const [rows, setRows] = useState<ReferralDashboardRow[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [pageRows, setPageRows] = useState<ReferralDashboardRow[]>([]);
+  const [pageTotal, setPageTotal] = useState(0);
+  const [pageLoading, setPageLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && !session) router.push('/');
@@ -30,21 +36,41 @@ export default function DashboardPage() {
     supabase.from('platforms').select('*').order('name').then(({ data }) => setPlatforms(data || []));
   }, []);
 
+  const filters = { platformId: platformId || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined };
+
+  // KPIs/funnel need the full filtered set to be accurate; the table below
+  // is paginated server-side (10 rows/page) instead of slicing this array.
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const filters = { platformId: platformId || undefined, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined };
       const [dashboardRows, accounts] = await Promise.all([fetchDashboardRows(filters), fetchAccounts(platformId || undefined)]);
       setRows(dashboardRows);
       setSummary(summarizeDashboard(dashboardRows, accounts.length));
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platformId, dateFrom, dateTo]);
 
   useEffect(() => {
     if (session) load();
   }, [session, load]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [platformId, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (!session) return;
+    setPageLoading(true);
+    fetchDashboardRowsPage(filters, page, PAGE_SIZE)
+      .then(({ rows: r, total }) => {
+        setPageRows(r);
+        setPageTotal(total);
+      })
+      .finally(() => setPageLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, platformId, dateFrom, dateTo, page]);
 
   if (!session) return null;
 
@@ -141,7 +167,7 @@ export default function DashboardPage() {
               </Card>
             </div>
 
-            <Card title="Recent Referrals">
+            <Card title="All Referrals">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -156,29 +182,52 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows
-                      .slice()
-                      .sort((a, b) => new Date(b.referral_date).getTime() - new Date(a.referral_date).getTime())
-                      .slice(0, 20)
-                      .map((r) => (
-                        <tr key={r.referral_id} className="border-b border-gray-100">
-                          <td className="py-2 pr-4 font-medium text-gray-800">{r.first_name} {r.last_name}</td>
-                          <td className="py-2 pr-4">{r.platform_name}</td>
-                          <td className="py-2 pr-4">{r.account_name}</td>
-                          <td className="py-2 pr-4">{r.job_title}</td>
-                          <td className="py-2 pr-4">
-                            <span className={`badge ${r.status === 'hired' ? 'badge-success' : r.status === 'not_hired' ? 'badge-danger' : r.status === 'applied' ? 'badge-info' : 'badge-warning'}`}>
-                              {r.status.replace('_', ' ')}
-                            </span>
-                          </td>
-                          <td className="py-2 pr-4">{new Date(r.referral_date).toLocaleDateString()}</td>
-                          <td className="py-2 pr-4">{r.bonus_amount ? `${formatCurrency(r.bonus_amount)} (${r.bonus_status})` : '-'}</td>
-                        </tr>
-                      ))}
+                    {pageRows.map((r) => (
+                      <tr key={r.referral_id} className="border-b border-gray-100">
+                        <td className="py-2 pr-4 font-medium text-gray-800">{r.first_name} {r.last_name}</td>
+                        <td className="py-2 pr-4">{r.platform_name}</td>
+                        <td className="py-2 pr-4">{r.account_name}</td>
+                        <td className="py-2 pr-4">{r.job_title}</td>
+                        <td className="py-2 pr-4">
+                          <span className={`badge ${r.status === 'hired' ? 'badge-success' : r.status === 'not_hired' ? 'badge-danger' : r.status === 'applied' ? 'badge-info' : 'badge-warning'}`}>
+                            {r.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4">{new Date(r.referral_date).toLocaleDateString()}</td>
+                        <td className="py-2 pr-4">{r.bonus_amount ? `${formatCurrency(r.bonus_amount)} (${r.bonus_status})` : '-'}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
-                {rows.length === 0 && <p className="text-center text-gray-500 py-8">No referrals match these filters</p>}
+                {!pageLoading && pageRows.length === 0 && <p className="text-center text-gray-500 py-8">No referrals match these filters</p>}
               </div>
+
+              {pageTotal > 0 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">
+                  <span>
+                    Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, pageTotal)} of {pageTotal}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0 || pageLoading}
+                      className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                      aria-label="Previous page"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span>Page {page + 1} of {Math.max(1, Math.ceil(pageTotal / PAGE_SIZE))}</span>
+                    <button
+                      onClick={() => setPage((p) => (p + 1) * PAGE_SIZE < pageTotal ? p + 1 : p)}
+                      disabled={(page + 1) * PAGE_SIZE >= pageTotal || pageLoading}
+                      className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                      aria-label="Next page"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </Card>
           </>
         )}

@@ -22,6 +22,28 @@ export async function fetchDashboardRows(filters: DashboardFilters): Promise<Ref
   return data ?? [];
 }
 
+// Paginated, backend-driven (Postgres does the LIMIT/OFFSET via .range(),
+// not the browser slicing an already-fetched array). Sorted newest-first, so
+// with real referral dates kept after synthetic ones, real data always
+// surfaces on the first pages.
+export async function fetchDashboardRowsPage(
+  filters: DashboardFilters,
+  page: number,
+  pageSize = 10
+): Promise<{ rows: ReferralDashboardRow[]; total: number }> {
+  let query = supabase.from('vw_referral_dashboard').select('*', { count: 'exact' });
+  if (filters.platformId) query = query.eq('platform_id', filters.platformId);
+  if (filters.accountId) query = query.eq('account_id', filters.accountId);
+  if (filters.dateFrom) query = query.gte('referral_date', filters.dateFrom);
+  if (filters.dateTo) query = query.lte('referral_date', filters.dateTo);
+
+  const from = page * pageSize;
+  const to = from + pageSize - 1;
+  const { data, error, count } = await query.order('referral_date', { ascending: false }).range(from, to);
+  if (error) throw error;
+  return { rows: data ?? [], total: count ?? 0 };
+}
+
 export async function fetchAccounts(platformId?: string): Promise<Account[]> {
   let query = supabase.from('accounts').select('*').order('name');
   if (platformId) query = query.eq('platform_id', platformId);
