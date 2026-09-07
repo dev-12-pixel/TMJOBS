@@ -1,7 +1,7 @@
 'use client';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Layout } from '@/components/Layout';
 import { Card } from '@/components/ui/Card';
@@ -10,13 +10,19 @@ import { Input } from '@/components/ui/Input';
 import { supabase } from '@/lib/supabase';
 import { findPossibleDuplicates } from '@/lib/services/candidates';
 import type { Candidate } from '@/lib/types';
-import { Search, UserPlus, AlertTriangle } from 'lucide-react';
+import { Search, UserPlus, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 10;
 
 export default function CandidatesPage() {
   const { session, loading: authLoading } = useAuth();
   const router = useRouter();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [rowsLoading, setRowsLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [duplicates, setDuplicates] = useState<Candidate[]>([]);
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
@@ -26,13 +32,34 @@ export default function CandidatesPage() {
   }, [session, authLoading, router]);
 
   useEffect(() => {
-    if (session) fetchCandidates();
-  }, [session]);
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const fetchCandidates = async () => {
-    const { data } = await supabase.from('candidates').select('*').order('created_at', { ascending: false });
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch]);
+
+  // Backend-paginated + backend-searched (Postgres ilike via .range()), since
+  // the candidate table can hold thousands of rows - never fetch it whole.
+  const fetchCandidates = useCallback(async () => {
+    setRowsLoading(true);
+    const from = page * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    let query = supabase.from('candidates').select('*', { count: 'exact' });
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.trim();
+      query = query.or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`);
+    }
+    const { data, count } = await query.order('created_at', { ascending: false }).range(from, to);
     setCandidates(data || []);
-  };
+    setTotal(count || 0);
+    setRowsLoading(false);
+  }, [page, debouncedSearch]);
+
+  useEffect(() => {
+    if (session) fetchCandidates();
+  }, [session, fetchCandidates]);
 
   const createCandidate = async (formData: FormData) => {
     const { error } = await supabase.from('candidates').insert({
@@ -67,23 +94,13 @@ export default function CandidatesPage() {
 
   if (!session) return null;
 
-  const filtered = candidates.filter((c) => {
-    const q = search.toLowerCase();
-    return (
-      !q ||
-      `${c.first_name} ${c.last_name}`.toLowerCase().includes(q) ||
-      c.email?.toLowerCase().includes(q) ||
-      c.phone?.includes(q)
-    );
-  });
-
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold text-gray-800">Candidates</h2>
-            <p className="text-gray-500">Every person you've referred, across every platform</p>
+            <p className="text-gray-500">Every person referred or self-applied, across every platform</p>
           </div>
           <Button onClick={() => setShowAddForm(!showAddForm)}><UserPlus className="w-4 h-4 mr-2 inline" />Add Candidate</Button>
         </div>
@@ -134,20 +151,54 @@ export default function CandidatesPage() {
             />
           </div>
           <div className="space-y-2">
-            {filtered.map((candidate) => (
+            {rowsLoading && <p className="text-center text-gray-400 py-8">Loading...</p>}
+            {!rowsLoading && candidates.map((candidate) => (
               <Link
                 key={candidate.id}
                 href={`/candidates/${candidate.id}`}
                 className="flex items-center justify-between p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
               >
                 <div>
-                  <p className="font-medium text-gray-800">{candidate.first_name} {candidate.last_name}</p>
+                  <p className="font-medium text-gray-800">
+                    {candidate.first_name} {candidate.last_name}
+                    {candidate.source === 'google_form' && (
+                      <span className="badge badge-info ml-2 align-middle">Google Form</span>
+                    )}
+                  </p>
                   <p className="text-sm text-gray-500">{candidate.email || 'No email'} {candidate.phone ? `• ${candidate.phone}` : ''}</p>
+                  {candidate.primary_skills && (
+                    <p className="text-xs text-gray-400 mt-1">Skills: {candidate.primary_skills}</p>
+                  )}
                 </div>
               </Link>
             ))}
-            {filtered.length === 0 && <p className="text-center text-gray-500 py-8">No candidates found</p>}
+            {!rowsLoading && candidates.length === 0 && <p className="text-center text-gray-500 py-8">No candidates found</p>}
           </div>
+
+          {total > 0 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600">
+              <span>Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0 || rowsLoading}
+                  className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span>Page {page + 1} of {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
+                <button
+                  onClick={() => setPage((p) => ((p + 1) * PAGE_SIZE < total ? p + 1 : p))}
+                  disabled={(page + 1) * PAGE_SIZE >= total || rowsLoading}
+                  className="p-2 border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     </Layout>

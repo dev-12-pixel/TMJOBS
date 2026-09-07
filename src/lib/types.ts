@@ -44,6 +44,10 @@ export interface Candidate {
   linkedin_url: string | null;
   resume_url: string | null;
   notes: string | null;
+  intro: string | null;
+  primary_skills: string | null;
+  secondary_skills: string | null;
+  source: 'manual' | 'google_form';
   created_by: string | null;
   created_at: string;
   updated_at: string;

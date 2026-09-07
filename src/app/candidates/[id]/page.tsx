@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/utils';
 import type { Candidate, ReferralDashboardRow, Email, ReferralStatusHistory } from '@/lib/types';
-import { Mail, Phone, Linkedin } from 'lucide-react';
+import { Mail, Phone, Linkedin, FileText } from 'lucide-react';
 
 export default function CandidateDetailPage() {
   const { session, loading: authLoading } = useAuth();
@@ -72,7 +72,10 @@ export default function CandidateDetailPage() {
     <Layout>
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold text-gray-800">{candidate.first_name} {candidate.last_name}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-3xl font-bold text-gray-800">{candidate.first_name} {candidate.last_name}</h2>
+            {candidate.source === 'google_form' && <span className="badge badge-info">Google Form</span>}
+          </div>
           <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
             {candidate.email && <span className="flex items-center gap-1"><Mail className="w-4 h-4" />{candidate.email}</span>}
             {candidate.phone && <span className="flex items-center gap-1"><Phone className="w-4 h-4" />{candidate.phone}</span>}
@@ -81,8 +84,25 @@ export default function CandidateDetailPage() {
                 <Linkedin className="w-4 h-4" />LinkedIn
               </a>
             )}
+            {candidate.resume_url && (
+              <a href={candidate.resume_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary-600">
+                <FileText className="w-4 h-4" />Resume
+              </a>
+            )}
           </div>
         </div>
+
+        {(candidate.intro || candidate.primary_skills || candidate.secondary_skills) && (
+          <Card title="Application">
+            {candidate.intro && <p className="text-sm text-gray-700 mb-3">{candidate.intro}</p>}
+            {candidate.primary_skills && (
+              <p className="text-sm mb-1"><span className="text-gray-500">Primary skills:</span> {candidate.primary_skills}</p>
+            )}
+            {candidate.secondary_skills && (
+              <p className="text-sm"><span className="text-gray-500">Secondary skills:</span> {candidate.secondary_skills}</p>
+            )}
+          </Card>
+        )}
 
         <Card title="Referrals">
           <div className="space-y-4">
